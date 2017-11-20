@@ -11,7 +11,7 @@ rescue => e
 
   puts recv
   puts meth
-  puts recv.method(meth).parameters
+  puts recv && meth && recv.method(meth).parameters
   puts "^^^^^^^^"
   fail
 end
