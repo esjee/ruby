@@ -1608,7 +1608,7 @@ vm_callee_setup_arg(rb_execution_context_t *ec, struct rb_calling_info *calling,
 	CALLER_SETUP_ARG(cfp, calling, ci); /* splat arg */
 
 	if (calling->argc != iseq->body->param.lead_num) {
-	    argument_arity_error(ec, iseq, calling->argc, iseq->body->param.lead_num, iseq->body->param.lead_num);
+    argument_arity_error(ec, iseq, calling, calling->argc, iseq->body->param.lead_num, iseq->body->param.lead_num);
 	}
 
 	CI_SET_FASTPATH(cc, vm_call_iseq_setup_func(ci, param_size, local_size),
@@ -2593,7 +2593,7 @@ vm_callee_setup_block_arg(rb_execution_context_t *ec, struct rb_calling_info *ca
 		}
 	    }
 	    else {
-		argument_arity_error(ec, iseq, calling->argc, iseq->body->param.lead_num, iseq->body->param.lead_num);
+        argument_arity_error(ec, iseq, calling, calling->argc, iseq->body->param.lead_num, iseq->body->param.lead_num);
 	    }
 	}
 

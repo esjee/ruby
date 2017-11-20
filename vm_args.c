@@ -9,7 +9,7 @@
 **********************************************************************/
 
 NORETURN(static void raise_argument_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const VALUE exc));
-NORETURN(static void argument_arity_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const int miss_argc, const int min_argc, const int max_argc));
+NORETURN(static void argument_arity_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, struct rb_calling_info *calling, const int miss_argc, const int min_argc, const int max_argc));
 NORETURN(static void argument_kw_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const char *error, const VALUE keys));
 VALUE rb_keyword_error_new(const char *error, VALUE keys); /* class.c */
 static VALUE method_missing(VALUE obj, ID id, int argc, const VALUE *argv,
@@ -594,8 +594,7 @@ setup_parameters_complex(rb_execution_context_t * const ec, const rb_iseq_t * co
 	    else {
         /* interesting */
 
-        rb_gv_set("$kerk", calling->recv);
-		argument_arity_error(ec, iseq, given_argc, min_argc, max_argc);
+        argument_arity_error(ec, iseq, calling, given_argc, min_argc, max_argc);
 	    }
 	}
     }
@@ -618,8 +617,9 @@ setup_parameters_complex(rb_execution_context_t * const ec, const rb_iseq_t * co
 	}
 	else {
     /* interesting */
-	    argument_arity_error(ec, iseq, given_argc, min_argc, max_argc);
-	}
+    argument_arity_error(ec, iseq, calling, given_argc, min_argc, max_argc);
+    //argument_arity_error(ec, iseq, given_argc, min_argc, max_argc);
+  }
     }
 
     if (iseq->body->param.flags.has_lead) {
@@ -718,10 +718,10 @@ raise_argument_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const VA
 
 static void
 argument_arity_error(rb_execution_context_t *ec, const rb_iseq_t *iseq,
-                       const rb_calling_info *const calling,
+                       struct rb_calling_info *calling,
                        const int miss_argc, const int min_argc, const int max_argc)
 {
-  VALUE x = 0;
+VALUE method_name_called = rb_iseq_method_name(iseq);
     VALUE exc = rb_arity_error_new(miss_argc, min_argc, max_argc);
     if (iseq->body->param.flags.has_kw) {
 	const struct rb_iseq_param_keyword *const kw = iseq->body->param.keyword;
@@ -747,10 +747,11 @@ argument_arity_error(rb_execution_context_t *ec, const rb_iseq_t *iseq,
     //x = rb_class_name(rb_obj_class(iseq));
 // x = rb_iseq_path(iseq);
 //x = rb_iseq_realpath(iseq);
-x = rb_iseq_method_name(iseq);
+// x = rb_iseq_method_name(iseq);
 // x = rb_iseq_first_lineno(iseq);
 //x = iseqw_to_ary(iseq);
-    rb_iv_set(exc, "@kerk", x);
+    rb_iv_set(exc, "@receiver", calling->recv);
+rb_iv_set(exc, "@method_name", method_name_called);
     raise_argument_error(ec, iseq, exc);
 }
 

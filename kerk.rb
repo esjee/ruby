@@ -6,8 +6,12 @@ begin
 rescue => e
   e
   puts "~~~~~~~~~"
-  puts e.instance_variable_get("@kerk");
-  puts $kerk
+  recv = e.instance_variable_get("@receiver");
+  meth = e.instance_variable_get("@method_name");
+
+  puts recv
+  puts meth
+  puts recv.method(meth).parameters
   puts "^^^^^^^^"
   fail
 end
