@@ -592,6 +592,9 @@ setup_parameters_complex(rb_execution_context_t * const ec, const rb_iseq_t * co
 		args_extend(args, min_argc);
 	    }
 	    else {
+        /* interesting */
+
+        rb_gv_set("$kerk", calling->recv);
 		argument_arity_error(ec, iseq, given_argc, min_argc, max_argc);
 	    }
 	}
@@ -614,6 +617,7 @@ setup_parameters_complex(rb_execution_context_t * const ec, const rb_iseq_t * co
 	    given_argc = max_argc;
 	}
 	else {
+    /* interesting */
 	    argument_arity_error(ec, iseq, given_argc, min_argc, max_argc);
 	}
     }
@@ -713,8 +717,11 @@ raise_argument_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const VA
 }
 
 static void
-argument_arity_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const int miss_argc, const int min_argc, const int max_argc)
+argument_arity_error(rb_execution_context_t *ec, const rb_iseq_t *iseq,
+                       const rb_calling_info *const calling,
+                       const int miss_argc, const int min_argc, const int max_argc)
 {
+  VALUE x = 0;
     VALUE exc = rb_arity_error_new(miss_argc, min_argc, max_argc);
     if (iseq->body->param.flags.has_kw) {
 	const struct rb_iseq_param_keyword *const kw = iseq->body->param.keyword;
@@ -734,6 +741,16 @@ argument_arity_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const in
 	    RSTRING_PTR(mesg)[RSTRING_LEN(mesg)-1] = ')';
 	}
     }
+
+//x = rb_iseq_label(iseq);
+//x = rb_iseq_absolute_path(iseq);
+    //x = rb_class_name(rb_obj_class(iseq));
+// x = rb_iseq_path(iseq);
+//x = rb_iseq_realpath(iseq);
+x = rb_iseq_method_name(iseq);
+// x = rb_iseq_first_lineno(iseq);
+//x = iseqw_to_ary(iseq);
+    rb_iv_set(exc, "@kerk", x);
     raise_argument_error(ec, iseq, exc);
 }
 
