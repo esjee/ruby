@@ -10,7 +10,7 @@
 
 NORETURN(static void raise_argument_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const VALUE exc));
 NORETURN(static void argument_arity_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, struct rb_calling_info *calling, const int miss_argc, const int min_argc, const int max_argc));
-NORETURN(static void argument_kw_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const char *error, const VALUE keys));
+NORETURN(static void argument_kw_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, struct rb_calling_info *calling, const char *error, const VALUE keys));
 VALUE rb_keyword_error_new(const char *error, VALUE keys); /* class.c */
 static VALUE method_missing(VALUE obj, ID id, int argc, const VALUE *argv,
 			    enum method_missing_reason call_status);
@@ -394,7 +394,7 @@ args_setup_kw_parameters_lookup(const ID key, VALUE *ptr, const VALUE *const pas
 
 static void
 args_setup_kw_parameters(VALUE* const passed_values, const int passed_keyword_len, const VALUE *const passed_keywords,
-			 const rb_iseq_t * const iseq, VALUE * const locals)
+			 const rb_iseq_t * const iseq, struct rb_calling_info *calling, VALUE * const locals)
 {
     const ID *acceptable_keywords = iseq->body->param.keyword->table;
     const int req_key_num = iseq->body->param.keyword->required_num;
@@ -416,7 +416,7 @@ args_setup_kw_parameters(VALUE* const passed_values, const int passed_keyword_le
 	}
     }
 
-    if (missing) argument_kw_error(GET_EC(), iseq, "missing", missing);
+    if (missing) argument_kw_error(GET_EC(), iseq, calling, "missing", missing);
 
     for (di=0; i<key_num; i++, di++) {
 	if (args_setup_kw_parameters_lookup(acceptable_keywords[i], &locals[i], passed_keywords, passed_values, passed_keyword_len)) {
@@ -457,7 +457,7 @@ args_setup_kw_parameters(VALUE* const passed_values, const int passed_keyword_le
     else {
 	if (found != passed_keyword_len) {
 	    VALUE keys = make_unknown_kw_hash(passed_keywords, passed_keyword_len, passed_values);
-	    argument_kw_error(GET_EC(), iseq, "unknown", keys);
+	    argument_kw_error(GET_EC(), iseq, calling, "unknown", keys);
 	}
     }
 
@@ -640,7 +640,7 @@ setup_parameters_complex(rb_execution_context_t * const ec, const rb_iseq_t * co
 
 	if (args->kw_argv != NULL) {
 	    const struct rb_call_info_kw_arg *kw_arg = args->kw_arg;
-	    args_setup_kw_parameters(args->kw_argv, kw_arg->keyword_len, kw_arg->keywords, iseq, klocals);
+	    args_setup_kw_parameters(args->kw_argv, kw_arg->keyword_len, kw_arg->keywords, iseq, calling, klocals);
 	}
 	else if (!NIL_P(keyword_hash)) {
 	    int kw_len = rb_long2int(RHASH_SIZE(keyword_hash));
@@ -651,18 +651,18 @@ setup_parameters_complex(rb_execution_context_t * const ec, const rb_iseq_t * co
 	    arg.argc = 0;
 	    rb_hash_foreach(keyword_hash, fill_keys_values, (VALUE)&arg);
 	    VM_ASSERT(arg.argc == kw_len);
-	    args_setup_kw_parameters(arg.vals, kw_len, arg.keys, iseq, klocals);
+	    args_setup_kw_parameters(arg.vals, kw_len, arg.keys, iseq, calling, klocals);
 	}
 	else {
 	    VM_ASSERT(args_argc(args) == 0);
-	    args_setup_kw_parameters(NULL, 0, NULL, iseq, klocals);
+	    args_setup_kw_parameters(NULL, 0, NULL, iseq, calling, klocals);
 	}
     }
     else if (iseq->body->param.flags.has_kwrest) {
 	args_setup_kw_rest_parameter(keyword_hash, locals + iseq->body->param.keyword->rest_start);
     }
     else if (!NIL_P(keyword_hash) && RHASH_SIZE(keyword_hash) > 0) {
-	argument_kw_error(ec, iseq, "unknown", rb_hash_keys(keyword_hash));
+	argument_kw_error(ec, iseq, calling, "unknown", rb_hash_keys(keyword_hash));
     }
 
     if (iseq->body->param.flags.has_block) {
@@ -743,9 +743,14 @@ argument_arity_error(rb_execution_context_t *ec, const rb_iseq_t *iseq,
 }
 
 static void
-argument_kw_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const char *error, const VALUE keys)
+argument_kw_error(rb_execution_context_t *ec, const rb_iseq_t *iseq,
+		  struct rb_calling_info *calling, const char *error,
+		  const VALUE keys)
 {
-    raise_argument_error(ec, iseq, rb_keyword_error_new(error, keys));
+    VALUE exc = rb_keyword_error_new(error, keys);
+    rb_iv_set(exc, "@receiver", calling->recv);
+    rb_iv_set(exc, "@method_name", rb_iseq_method_name(iseq));
+    raise_argument_error(ec, iseq, exc);
 }
 
 static inline void
