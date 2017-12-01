@@ -615,7 +615,7 @@ setup_parameters_complex(rb_execution_context_t * const ec, const rb_iseq_t * co
 	}
 	else {
 	    argument_arity_error(ec, iseq, calling, given_argc, min_argc, max_argc);
-  }
+	}
     }
 
     if (iseq->body->param.flags.has_lead) {
