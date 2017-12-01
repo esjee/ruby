@@ -27,6 +27,10 @@ with all sufficient information, see the ChangeLog file or Redmine
   * Array#append  [Feature #12746]
   * Array#prepend  [Feature #12746]
 
+* Data
+
+  * Now deprecated [Feature #3072]
+
 * Dir
 
   * Dir.glob provides new optional keyword argument, :base.
@@ -42,6 +46,7 @@ with all sufficient information, see the ChangeLog file or Redmine
   * File.stat, File.exist?, and other rb_stat()-using methods release GVL
     [Bug #13941]
   * File.rename releases GVL [Feature #13951]
+  * Add File.lutime  [Feature #4052]
 
 * Hash
 
@@ -71,11 +76,11 @@ with all sufficient information, see the ChangeLog file or Redmine
 * Kernel
 
   * Kernel#yield_self  [Feature #6721]
+  * Kernel#pp [Feature #14123]
 
-* Net::HTTP
-
-  * Net::HTTP.new supports no_proxy parameter [Feature #11195]
-  * Net::HTTP#min_version/max_version [Feature #9450]
+* Module
+  * Module#attr, attr_accessor, attr_reader, attr_writer are now public [#14132]
+  * Module#define_method, alias_method, undef_method, remove_method are now public [#14133]
 
 * Numeric
 
@@ -94,7 +99,7 @@ with all sufficient information, see the ChangeLog file or Redmine
     [Feature #7688]
 
 * Regexp
-  * Update to Onigmo 6.1.1.
+  * Update to Onigmo 6.1.3-669ac9997619954c298da971fcfacccf36909d05.
     * Support absent operator https://github.com/k-takata/Onigmo/issues/82
 
 * String
@@ -158,7 +163,15 @@ with all sufficient information, see the ChangeLog file or Redmine
   * IPAddr now rejects invalid address mask. [Bug #13399]
   * IPAddr#ipv4_compat and #ipv4_compat? are deprecated. [Bug #13769]
 
+* IRB
+  * `binding.irb` automatically requires irb and runs [Bug #13099] [experimental]
+  * Show source around `binding.irb` on session start [Feature #14124]
+
 * Net::HTTP
+  * Net::HTTP.new supports no_proxy parameter [Feature #11195]
+
+  * Net::HTTP#min_version/max_version [Feature #9450]
+
   * Add more HTTP status classes
 
   * Net::HTTP::STATUS_CODES is added as HTTP Status Code Repository [Misc #12935]
@@ -173,7 +186,17 @@ with all sufficient information, see the ChangeLog file or Redmine
 
 * Psych
 
-  * Update to Psych 3.0.0.beta3.
+  * Update to Psych 3.0.0.
+    * Add :symbolize_names option to Psych.load, Psych.safe_load like JSON.parse
+      https://github.com/ruby/psych/pull/333, https://github.com/ruby/psych/pull/337
+    * Add Psych::Handler#event_location
+      https://github.com/ruby/psych/pull/326
+    * Make frozen string literal = true
+      https://github.com/ruby/psych/pull/320
+    * Preserve time zone offset when deserializing times
+      https://github.com/ruby/psych/pull/316
+    * Removed deprecated method aliases for syck gem
+      https://github.com/ruby/psych/pull/312
 
 * RbConfig
   * New constants:
@@ -211,6 +234,9 @@ with all sufficient information, see the ChangeLog file or Redmine
 
 * StringIO
   * StringIO#write accepts multiple arguments
+
+* StringScanner
+  * Add StringScanner#size, StringScanner#captures, StringScanner#values_at  [Feature #836]
 
 * WEBrick
 
@@ -271,6 +297,9 @@ with all sufficient information, see the ChangeLog file or Redmine
 
 * Print backtrace and error message in reverse order if STDERR is unchanged and a tty.
   [Feature #8661] [experimental]
+
+* Print error message in bold/underlined text if STDERR is unchanged and a tty.
+  [Feature #14140] [experimental]
 
 * configure option --with-ext now mandates its arguments.  So for
   instance if you run ./configure --with-ext=openssl,+ then the

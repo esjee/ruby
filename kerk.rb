@@ -5,10 +5,10 @@ begin
   #File.open()
 
   # Ruby function, multiple args
-  #Foo.new.bar()
+  Foo.new.bar()
 
   # Ruby function, just missing kw_arg
-  Foo.new.bar2()
+  #Foo.new.bar2()
 
   # Proc
   #x = ->(a,b) {}

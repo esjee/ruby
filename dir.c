@@ -504,7 +504,7 @@ static DIR *
 opendir_without_gvl(const char *path)
 {
     if (vm_initialized) {
-	union { const char *in; void *out; } u;
+	union { const void *in; void *out; } u;
 
 	u.in = path;
 
@@ -1127,7 +1127,7 @@ rb_dir_getwd_ospath(void)
 #undef RUBY_UNTYPED_DATA_WARNING
 #define RUBY_UNTYPED_DATA_WARNING 0
     path_guard = Data_Wrap_Struct((VALUE)0, NULL, RUBY_DEFAULT_FREE, NULL);
-    path = my_getcwd();
+    path = ruby_getcwd();
     DATA_PTR(path_guard) = path;
 #ifdef __APPLE__
     cwd = rb_str_normalize_ospath(path, strlen(path));

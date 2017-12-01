@@ -1414,6 +1414,54 @@ eaccess(const char *path, int mode)
 }
 #endif
 
+struct access_arg {
+    const char *path;
+    int mode;
+};
+
+static void *
+nogvl_eaccess(void *ptr)
+{
+    struct access_arg *aa = ptr;
+
+    return (void *)(VALUE)eaccess(aa->path, aa->mode);
+}
+
+static int
+rb_eaccess(VALUE fname, int mode)
+{
+    struct access_arg aa;
+
+    FilePathValue(fname);
+    fname = rb_str_encode_ospath(fname);
+    aa.path = StringValueCStr(fname);
+    aa.mode = mode;
+
+    return (int)(VALUE)rb_thread_call_without_gvl(nogvl_eaccess, &aa,
+						RUBY_UBF_IO, 0);
+}
+
+static void *
+nogvl_access(void *ptr)
+{
+    struct access_arg *aa = ptr;
+
+    return (void *)(VALUE)access(aa->path, aa->mode);
+}
+
+static int
+rb_access(VALUE fname, int mode)
+{
+    struct access_arg aa;
+
+    FilePathValue(fname);
+    fname = rb_str_encode_ospath(fname);
+    aa.path = StringValueCStr(fname);
+    aa.mode = mode;
+
+    return (int)(VALUE)rb_thread_call_without_gvl(nogvl_access, &aa,
+						RUBY_UBF_IO, 0);
+}
 
 /*
  * Document-class: FileTest
@@ -1658,9 +1706,7 @@ rb_file_exists_p(VALUE obj, VALUE fname)
 static VALUE
 rb_file_readable_p(VALUE obj, VALUE fname)
 {
-    FilePathValue(fname);
-    fname = rb_str_encode_ospath(fname);
-    if (eaccess(StringValueCStr(fname), R_OK) < 0) return Qfalse;
+    if (rb_eaccess(fname, R_OK) < 0) return Qfalse;
     return Qtrue;
 }
 
@@ -1675,9 +1721,7 @@ rb_file_readable_p(VALUE obj, VALUE fname)
 static VALUE
 rb_file_readable_real_p(VALUE obj, VALUE fname)
 {
-    FilePathValue(fname);
-    fname = rb_str_encode_ospath(fname);
-    if (access(StringValueCStr(fname), R_OK) < 0) return Qfalse;
+    if (rb_access(fname, R_OK) < 0) return Qfalse;
     return Qtrue;
 }
 
@@ -1730,9 +1774,7 @@ rb_file_world_readable_p(VALUE obj, VALUE fname)
 static VALUE
 rb_file_writable_p(VALUE obj, VALUE fname)
 {
-    FilePathValue(fname);
-    fname = rb_str_encode_ospath(fname);
-    if (eaccess(StringValueCStr(fname), W_OK) < 0) return Qfalse;
+    if (rb_eaccess(fname, W_OK) < 0) return Qfalse;
     return Qtrue;
 }
 
@@ -1747,9 +1789,7 @@ rb_file_writable_p(VALUE obj, VALUE fname)
 static VALUE
 rb_file_writable_real_p(VALUE obj, VALUE fname)
 {
-    FilePathValue(fname);
-    fname = rb_str_encode_ospath(fname);
-    if (access(StringValueCStr(fname), W_OK) < 0) return Qfalse;
+    if (rb_access(fname, W_OK) < 0) return Qfalse;
     return Qtrue;
 }
 
@@ -1794,9 +1834,7 @@ rb_file_world_writable_p(VALUE obj, VALUE fname)
 static VALUE
 rb_file_executable_p(VALUE obj, VALUE fname)
 {
-    FilePathValue(fname);
-    fname = rb_str_encode_ospath(fname);
-    if (eaccess(StringValueCStr(fname), X_OK) < 0) return Qfalse;
+    if (rb_eaccess(fname, X_OK) < 0) return Qfalse;
     return Qtrue;
 }
 
@@ -1811,9 +1849,7 @@ rb_file_executable_p(VALUE obj, VALUE fname)
 static VALUE
 rb_file_executable_real_p(VALUE obj, VALUE fname)
 {
-    FilePathValue(fname);
-    fname = rb_str_encode_ospath(fname);
-    if (access(StringValueCStr(fname), X_OK) < 0) return Qfalse;
+    if (rb_access(fname, X_OK) < 0) return Qfalse;
     return Qtrue;
 }
 
@@ -2626,6 +2662,7 @@ rb_file_s_lchown(int argc, VALUE *argv)
 struct utime_args {
     const struct timespec* tsp;
     VALUE atime, mtime;
+    int follow; /* Whether to act on symlinks (1) or their referent (0) */
 };
 
 #ifdef UTIME_EINVAL
@@ -2681,11 +2718,27 @@ utime_internal(const char *path, void *arg)
 
 #if defined(HAVE_UTIMENSAT)
     static int try_utimensat = 1;
+# ifdef AT_SYMLINK_NOFOLLOW
+    static int try_utimensat_follow = 1;
+# else
+    const int try_utimensat_follow = 0;
+# endif
+    int flags = 0;
 
-    if (try_utimensat) {
-        if (utimensat(AT_FDCWD, path, tsp, 0) < 0) {
+    if (v->follow ? try_utimensat_follow : try_utimensat) {
+# ifdef AT_SYMLINK_NOFOLLOW
+	if (v->follow) {
+	    flags = AT_SYMLINK_NOFOLLOW;
+	}
+# endif
+
+	if (utimensat(AT_FDCWD, path, tsp, flags) < 0) {
             if (errno == ENOSYS) {
-                try_utimensat = 0;
+# ifdef AT_SYMLINK_NOFOLLOW
+		try_utimensat_follow = 0;
+# endif
+		if (!v->follow)
+		    try_utimensat = 0;
                 goto no_utimensat;
             }
             return -1; /* calls utime_failed */
@@ -2702,6 +2755,9 @@ no_utimensat:
         tvbuf[1].tv_usec = (int)(tsp[1].tv_nsec / 1000);
         tvp = tvbuf;
     }
+#ifdef HAVE_LUTIMES
+    if (v->follow) return lutimes(path, tvp);
+#endif
     return utimes(path, tvp);
 }
 
@@ -2730,17 +2786,8 @@ utime_internal(const char *path, void *arg)
 
 #endif
 
-/*
- * call-seq:
- *  File.utime(atime, mtime, file_name,...)   ->  integer
- *
- * Sets the access and modification times of each
- * named file to the first two arguments. Returns
- * the number of file names in the argument list.
- */
-
 static VALUE
-rb_file_s_utime(int argc, VALUE *argv)
+utime_internal_i(int argc, VALUE *argv, int follow)
 {
     struct utime_args args;
     struct timespec tss[2], *tsp = NULL;
@@ -2748,6 +2795,8 @@ rb_file_s_utime(int argc, VALUE *argv)
     apply2args(2);
     args.atime = *argv++;
     args.mtime = *argv++;
+
+    args.follow = follow;
 
     if (!NIL_P(args.atime) || !NIL_P(args.mtime)) {
 	tsp = tss;
@@ -2761,6 +2810,45 @@ rb_file_s_utime(int argc, VALUE *argv)
 
     return apply2files(utime_internal, argc, argv, &args);
 }
+
+/*
+ * call-seq:
+ *  File.utime(atime, mtime, file_name,...)   ->  integer
+ *
+ * Sets the access and modification times of each named file to the
+ * first two arguments. If a file is a symlink, this method acts upon
+ * its referent rather than the link itself; for the inverse
+ * behavior see <code>File.lutime</code>. Returns the number of file
+ * names in the argument list.
+ */
+
+static VALUE
+rb_file_s_utime(int argc, VALUE *argv)
+{
+    return utime_internal_i(argc, argv, FALSE);
+}
+
+#if defined(HAVE_UTIMES) && (defined(HAVE_LUTIMES) || (defined(HAVE_UTIMENSAT) && defined(AT_SYMLINK_NOFOLLOW)))
+
+/*
+ * call-seq:
+ *  File.lutime(atime, mtime, file_name,...)   ->  integer
+ *
+ * Sets the access and modification times of each named file to the
+ * first two arguments. If a file is a symlink, this method acts upon
+ * the link itself as opposed to its referent; for the inverse
+ * behavior, see <code>File.utime</code>. Returns the number of file
+ * names in the argument list.
+ */
+
+static VALUE
+rb_file_s_lutime(int argc, VALUE *argv)
+{
+    return utime_internal_i(argc, argv, TRUE);
+}
+#else
+#define rb_file_s_lutime rb_f_notimplement
+#endif
 
 #ifdef RUBY_FUNCTION_NAME_STRING
 # define syserr_fail2(e, s1, s2) syserr_fail2_in(RUBY_FUNCTION_NAME_STRING, e, s1, s2)
@@ -3129,9 +3217,9 @@ getcwdofdrv(int drv)
        of a particular drive is to change chdir() to that drive,
        so save the old cwd before chdir()
     */
-    oldcwd = my_getcwd();
+    oldcwd = ruby_getcwd();
     if (chdir(drive) == 0) {
-	drvcwd = my_getcwd();
+	drvcwd = ruby_getcwd();
 	chdir(oldcwd);
 	xfree(oldcwd);
     }
@@ -3552,7 +3640,7 @@ rb_file_expand_path_internal(VALUE fname, VALUE dname, int abs_mode, int long_na
 	    p = pend;
 	}
 	else {
-	    char *e = append_fspath(result, fname, my_getcwd(), &enc, fsenc);
+	    char *e = append_fspath(result, fname, ruby_getcwd(), &enc, fsenc);
 	    tainted = 1;
 	    BUFINIT();
 	    p = e;
@@ -4638,7 +4726,7 @@ rb_file_s_join(VALUE klass, VALUE args)
 #if defined(HAVE_TRUNCATE) || defined(HAVE_CHSIZE)
 struct truncate_arg {
     const char *path;
-#if defined(HAVE_FTRUNCATE)
+#if defined(HAVE_TRUNCATE)
 #define NUM2POS(n) NUM2OFFT(n)
     off_t pos;
 #else
@@ -5841,7 +5929,7 @@ path_check_0(VALUE path, int execpath)
     char *p = 0, *s;
 
     if (!rb_is_absolute_path(p0)) {
-	char *buf = my_getcwd();
+	char *buf = ruby_getcwd();
 	VALUE newpath;
 
 	newpath = rb_str_new2(buf);
@@ -6223,6 +6311,7 @@ Init_File(void)
     rb_define_singleton_method(rb_cFile, "chown", rb_file_s_chown, -1);
     rb_define_singleton_method(rb_cFile, "lchmod", rb_file_s_lchmod, -1);
     rb_define_singleton_method(rb_cFile, "lchown", rb_file_s_lchown, -1);
+    rb_define_singleton_method(rb_cFile, "lutime", rb_file_s_lutime, -1);
 
     rb_define_singleton_method(rb_cFile, "link", rb_file_s_link, 2);
     rb_define_singleton_method(rb_cFile, "symlink", rb_file_s_symlink, 2);

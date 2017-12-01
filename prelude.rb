@@ -140,4 +140,20 @@ class Binding
     require 'irb'
     irb
   end
+
+  # suppress redefinition warning
+  alias irb irb # :nodoc:
+end
+
+module Kernel
+  # prints arguments in pretty form.
+  #
+  # pp returns argument(s).
+  def pp(*objs)
+    require 'pp'
+    pp(*objs)
+  end
+
+  # suppress redefinition warning
+  alias pp pp # :nodoc:
 end

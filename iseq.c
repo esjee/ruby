@@ -2327,6 +2327,10 @@ rb_iseq_trace_set(const rb_iseq_t *iseq, rb_event_flag_t turnon_events)
     if (iseq->aux.trace_events == turnon_events) {
 	return;
     }
+    if (iseq->flags & ISEQ_USE_COMPILE_DATA) {
+	/* this is building ISeq */
+	return;
+    }
     else {
 	unsigned int i;
 	VALUE *iseq_encoded = (VALUE *)iseq->body->iseq_encoded;
