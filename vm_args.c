@@ -592,7 +592,7 @@ setup_parameters_complex(rb_execution_context_t * const ec, const rb_iseq_t * co
 		args_extend(args, min_argc);
 	    }
 	    else {
-        argument_arity_error(ec, iseq, calling, given_argc, min_argc, max_argc);
+		argument_arity_error(ec, iseq, calling, given_argc, min_argc, max_argc);
 	    }
 	}
     }
@@ -614,7 +614,7 @@ setup_parameters_complex(rb_execution_context_t * const ec, const rb_iseq_t * co
 	    given_argc = max_argc;
 	}
 	else {
-    argument_arity_error(ec, iseq, calling, given_argc, min_argc, max_argc);
+	    argument_arity_error(ec, iseq, calling, given_argc, min_argc, max_argc);
   }
     }
 
@@ -714,8 +714,8 @@ raise_argument_error(rb_execution_context_t *ec, const rb_iseq_t *iseq, const VA
 
 static void
 argument_arity_error(rb_execution_context_t *ec, const rb_iseq_t *iseq,
-                       struct rb_calling_info *calling,
-                       const int miss_argc, const int min_argc, const int max_argc)
+		     struct rb_calling_info *calling,
+		     const int miss_argc, const int min_argc, const int max_argc)
 {
     VALUE exc = rb_arity_error_new(miss_argc, min_argc, max_argc);
     if (iseq->body->param.flags.has_kw) {
